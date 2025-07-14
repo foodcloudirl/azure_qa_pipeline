@@ -1,0 +1,11 @@
+{
+  "configurations": [
+    {
+      "name": "Run auto QA as module",
+      "type": "python",
+      "request": "launch",
+      "module": "auto_impact_qa",
+      "console": "integratedTerminal"
+    }
+  ]
+}
