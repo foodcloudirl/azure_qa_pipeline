@@ -15,11 +15,38 @@ import requests
 from sqlalchemy import create_engine, MetaData, Table
 import sqlalchemy as sql
 
-from auto_impact_qa.foodiverse import fv_util as fv, fv_db as fvdb
+from foodiverse import fv_util as fv, fv_db as fvdb
 
-with open('connection_strings.json') as f:
-    creds = json.load(f)['foodiverse_users']
-    
+import os
+
+import os
+
+if os.path.exists("local.settings.json"):
+    with open("local.settings.json") as f:
+        settings = json.load(f)["Values"]
+        for k, v in settings.items():
+            os.environ[k] = v
+
+def load_fv_credentials():
+    org_map = {
+        "FoodCloud": "FoodCloud",
+        "FareShare UK": "FareShare_UK",
+        "Slovakia Food Net": "Slovakia_Food_Net",
+        "Czech Republic Food Net": "Czech_Republic_Food_Net"
+    }
+
+    creds = {}
+    for org, env_key in org_map.items():
+        user = os.getenv(f"FV_USER_{env_key}")
+        pwd = os.getenv(f"FV_PASS_{env_key}")
+        if user and pwd:
+            creds[org] = {"username": user, "password": pwd}
+        else:
+            raise ValueError(f"Missing credentials for {org}")
+    return creds
+
+creds = load_fv_credentials()
+
 
 
 

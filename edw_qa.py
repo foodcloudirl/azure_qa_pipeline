@@ -4,22 +4,26 @@ import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import create_engine, MetaData, text
+import os
 
-# Load connection strings
-try:
-    with open('connection_strings.json') as f:
-        try:
-            connection_data = json.load(f)
-            LDW_CONN_STRING = connection_data['ldw_engine']
-            POSTGRES_CONN_STRING = connection_data['engine']
-        except KeyError as e:
-            raise KeyError(f"Key {e} not found in connection_strings.json")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Error decoding JSON: {e}")
-except FileNotFoundError:
-    raise FileNotFoundError("connection_strings.json not found. Please create the file with the connection strings.")
-except Exception as e:
-    raise Exception(f"An unexpected error occurred: {e}")
+
+# only for local testing
+if os.path.exists("local.settings.json"):
+    with open("local.settings.json") as f:
+        settings = json.load(f).get("Values", {})
+        for k, v in settings.items():
+            os.environ[k] = v
+
+
+
+
+POSTGRES_ENGINE = os.environ.get("POSTGRES_ENGINE")
+LDW_CONN_STRING = os.environ.get("LDW_CONN_STRING")
+
+
+if not POSTGRES_ENGINE or not LDW_CONN_STRING:
+    raise ValueError("Missing DB connection strings in environment variables.")
+
 
 def get_edw_impact(conn, start_date, end_date, foodbank_name):
     """

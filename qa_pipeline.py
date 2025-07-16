@@ -1,10 +1,11 @@
 '''
 Module containing the QA Pipeline class to handle QA checks for Data Warehouse data against Foodiverse API data.
 '''
-import time #Chronic460!
+import time 
 import json
 import logging
 import uuid  # for generating unique run ID
+from sqlalchemy import create_engine, text
 
 import pandas as pd
 from datetime import datetime
@@ -12,22 +13,52 @@ from dateutil.relativedelta import relativedelta
 import requests
 
 from sqlalchemy import create_engine
-from auto_impact_qa.api_qa import get_api_impact, get_api_kpis
-from auto_impact_qa.edw_qa import get_edw_impact, get_edw_kpis
+import sys
+sys.stdout.flush()
 
-# get required connection strings
 
-try:
-    with open('connection_strings.json') as f:
-        connection_strings = json.load(f)
-        POSTGRES_ENGINE = connection_strings.get('engine')
-        LDW_CONN_STRING = connection_strings.get('ldw_engine')
-        if not POSTGRES_ENGINE or not LDW_CONN_STRING:
-            raise ValueError("Missing required keys in connection_strings.json")
-except FileNotFoundError:
-    raise FileNotFoundError("connection_strings.json not found. Ensure this file exists.")
-except json.JSONDecodeError:
-    raise ValueError("connection_strings.json contains invalid JSON. Fix the file format.")
+from api_qa import get_api_impact, get_api_kpis
+from edw_qa import get_edw_impact, get_edw_kpis
+import os
+
+
+# only for local testing
+if os.path.exists("local.settings.json"):
+    with open("local.settings.json") as f:
+        settings = json.load(f).get("Values", {})
+        for k, v in settings.items():
+            os.environ[k] = v
+
+
+
+
+POSTGRES_ENGINE = os.environ.get("POSTGRES_ENGINE")
+LDW_CONN_STRING = os.environ.get("LDW_CONN_STRING")
+
+if not POSTGRES_ENGINE or not LDW_CONN_STRING:
+    raise ValueError("Missing DB connection strings in environment variables.")
+
+def connect_with_retry(connection_string, retries=5, delay=10):
+    """
+    Attempts to connect to the EDW with retry logic to handle Synapse cold-start delays.
+    """
+    for attempt in range(1, retries + 1):
+        try:
+            engine = create_engine(
+                f"{connection_string}/ldw",
+                echo=False,
+                connect_args={'autocommit': True}
+            )
+            conn = engine.connect()
+            print(f"[EDW] Connected on attempt {attempt}")
+            return engine
+        except Exception as e:
+            print(f"[EDW] Connection attempt {attempt} failed: {e}")
+            if attempt < retries:
+                print(f"[EDW] Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                raise
 
 
 
@@ -78,28 +109,37 @@ class Qa_Pipeline:
         Initialize an instance of the QA Pipeline class.
         '''
 
-        # set report variables
+        print(f"[{foodbank_name}] Initializing Qa_Pipeline..."); sys.stdout.flush()
+
+        # Set report variables
         self.year = year
         self.period = period
         self.period_type = period_type
         self.report_type = report_type
         self.foodbank_name = foodbank_name
 
-        # Added: generate unique run ID and timestamp
+        # Generate run ID and timestamp
         self.run_id = str(uuid.uuid4())
         self.run_timestamp = datetime.utcnow()
 
+        print(f"[{foodbank_name}] Connecting to EDW with retries..."); sys.stdout.flush()
 
-        # set up ldw engine
         try:
-            driver="{ODBC Driver 17 for SQL Server}"
-            self.ldw_engine=create_engine(f'{LDW_CONN_STRING}/ldw', echo=False, connect_args={'autocommit': True})
-            print('connected')
+            self.ldw_engine = connect_with_retry(LDW_CONN_STRING)
+            print(f"[{foodbank_name}] Engine created. Testing connection..."); sys.stdout.flush()
+
+            # Test connection
+            with self.ldw_engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+
+            print(f"[{foodbank_name}]  Connected to EDW."); sys.stdout.flush()
+
         except Exception as e:
-            print('conntection failed')
-            print(e)
-            exit()
+            print(f"[{foodbank_name}]  Could not connect to EDW after retries: {e}"); sys.stdout.flush()
+            raise
+
         return None
+
 
 
     def calculate_date_range(self):
@@ -134,14 +174,9 @@ class Qa_Pipeline:
     def fetch_data(self):
         '''
         Fetch data from the Foodiverse API and Data Warehouse.
-        Use report_mapping class variable to get function name.
-
-        Args:
-        - self (object): An instance of the QA Pipeline class.
-
-        Returns:
-        - tuple: A tuple of dataframes containing the data fetched from the Foodiverse API and Data Warehouse.
         '''
+        print(f"[{self.foodbank_name}] Fetching data..."); sys.stdout.flush()
+
         # Fetch data from Foodiverse API
         func = Qa_Pipeline.report_mapping[self.report_type][self.period_type]['api']
         self.api_data = func(self.start_date, self.end_date, self.foodbank_name)
@@ -151,13 +186,8 @@ class Qa_Pipeline:
             func = Qa_Pipeline.report_mapping[self.report_type][self.period_type]['edw']
             self.edw_data = func(conn, self.start_date, self.end_date, self.foodbank_name)
 
-            
-  #     print(f"API data columns: {self.api_data.columns.tolist()}")
-   #    print(f"EDW data columns: {self.edw_data.columns.tolist()}")
-
-        print(f" API data: {self.api_data.shape}, EDW data: {self.edw_data.shape}")
+        print(f"[{self.foodbank_name}] API data: {self.api_data.shape}, EDW data: {self.edw_data.shape}")
         return self.api_data, self.edw_data
-
 
 
 
@@ -504,23 +534,26 @@ class Qa_Pipeline:
         return None
 
     def run_qa_pipeline(self):
-        '''
-        Run the QA pipeline.
-
-        Args:
-        - self (object): An instance of the QA Pipeline class.
-
-        Returns:
-        - None
-        '''
+        print(f"[{self.foodbank_name}] Calculating date range..."); sys.stdout.flush()
         self.calculate_date_range()
+
+        print(f"[{self.foodbank_name}] Fetching data..."); sys.stdout.flush()
         self.fetch_data()
+
+        print(f"[{self.foodbank_name}] Preprocessing..."); sys.stdout.flush()
         self.preprocess_reports()
+
+        print(f"[{self.foodbank_name}] Merging data..."); sys.stdout.flush()
         self.merge_data()
+
+        print(f"[{self.foodbank_name}] Running QA checks..."); sys.stdout.flush()
         self.run_qa_checks()
+
+        print(f"[{self.foodbank_name}] Writing to EDW..."); sys.stdout.flush()
         self.write_to_edw()
 
-        return None
+        print(f"[{self.foodbank_name}] QA pipeline complete."); sys.stdout.flush()
+
     
 
 if __name__ == '__main__':

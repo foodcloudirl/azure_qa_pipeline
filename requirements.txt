@@ -1,0 +1,7 @@
+pandas
+sqlalchemy>=1.3
+python-dateutil
+requests
+psycopg2-binary
+azure-functions
+pymssql
