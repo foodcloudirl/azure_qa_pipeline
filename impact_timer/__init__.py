@@ -47,13 +47,30 @@ def determine_last_month():
 
 
 def run_impact_qa_for_all_foodbanks(year, month):
+    """
+    Run the full Impact QA pipeline for each foodbank for the specified year and month.
+
+    This function initializes and executes the QA pipeline for a list of foodbanks, ensuring
+    each is only processed once per run. It logs the start and completion (or failure) of each
+    QA job and provides a final log when all are complete.
+
+    Args:
+        year (int): The target year for the QA run.
+        month (int): The target month for the QA run.
+    """
     foodbanks = ['Slovakia Food Net', 'Czech Republic Food Net', 'FoodCloud', 'FareShare UK']
-    print("Starting QA for all foodbanks...")
+    logger.info("Starting QA for all foodbanks...")
+
+    executed = set()  #  Track which foodbanks have been processed
 
     for fb in foodbanks:
+        if fb in executed:
+            logger.warning(f"[SKIP] {fb} already processed in this run.")
+            continue
+        executed.add(fb)  #  Mark as processed
+
         try:
-            print(f"\nInstantiating pipeline for {fb}..."); sys.stdout.flush()
-            logger.info(f"[START] Impact QA for {fb} ({year}-{month:02d})")
+            logger.info(f"\n[START] Impact QA for {fb} ({year}-{month:02d})")
             start_time = time.time()
 
             pipeline = Qa_Pipeline(
@@ -64,16 +81,14 @@ def run_impact_qa_for_all_foodbanks(year, month):
                 foodbank_name=fb
             )
 
-            print(f" Running QA pipeline for {fb}"); sys.stdout.flush()
             pipeline.run_qa_pipeline()
 
             elapsed = round(time.time() - start_time, 2)
             logger.info(f"[SUCCESS] {fb} ({year}-{month:02d}) completed in {elapsed} seconds")
-            print(f" Success: {fb} | Time: {elapsed}s")
         except Exception as e:
-            logger.error(f" [FAIL] {fb}: {e}")
-            print(f" Failed for {fb}: {e}")
+            logger.error(f"[FAIL] {fb}: {e}")
 
+    logger.info("[DONE] QA run complete for all foodbanks.")
 
 
 
