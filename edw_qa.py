@@ -5,6 +5,9 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import create_engine, MetaData, text
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # only for local testing
@@ -56,6 +59,7 @@ def get_edw_impact(conn, start_date, end_date, foodbank_name):
     GROUP BY dimDonors.[Foodiverse official_id], dimDonors.[Foodiverse name]
     ORDER BY dimDonors.[Foodiverse official_id];
     """
+    logger.info(query)
     print(query)
     result = pd.read_sql(query, conn)
     return result
@@ -102,6 +106,7 @@ def get_edw_kpis(conn, start_date, end_date, foodbank_name):
     """
 
     print("Executing SQL Query:")
+    logger.info(query)
     print(query)
 
     df = pd.read_sql(query, conn)

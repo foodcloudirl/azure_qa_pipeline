@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 import sys
 sys.stdout.flush()
 
+logger = logging.getLogger(__name__)
 
 from api_qa import get_api_impact, get_api_kpis
 from edw_qa import get_edw_impact, get_edw_kpis
@@ -105,11 +106,11 @@ class Qa_Pipeline:
     #old state vs new state
 
     def __init__(self, year, period, period_type, report_type, foodbank_name):
-        '''
+        """
         Initialize an instance of the QA Pipeline class.
-        '''
+        """
 
-        print(f"[{foodbank_name}] Initializing Qa_Pipeline..."); sys.stdout.flush()
+        logger.info(f"[{foodbank_name}] Initializing Qa_Pipeline...")
 
         # Set report variables
         self.year = year
@@ -122,23 +123,20 @@ class Qa_Pipeline:
         self.run_id = str(uuid.uuid4())
         self.run_timestamp = datetime.utcnow()
 
-        print(f"[{foodbank_name}] Connecting to EDW with retries..."); sys.stdout.flush()
+        logger.info(f"[{foodbank_name}] Connecting to EDW with retry logic...")
 
         try:
             self.ldw_engine = connect_with_retry(LDW_CONN_STRING)
-            print(f"[{foodbank_name}] Engine created. Testing connection..."); sys.stdout.flush()
+            logger.info(f"[{foodbank_name}] Engine created. Testing connection...")
 
             # Test connection
             with self.ldw_engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
 
-            print(f"[{foodbank_name}]  Connected to EDW."); sys.stdout.flush()
-
+            logger.info(f"[{self.foodbank_name}] Connected to EDW successfully.")
         except Exception as e:
-            print(f"[{foodbank_name}]  Could not connect to EDW after retries: {e}"); sys.stdout.flush()
+            logger.error(f"[{self.foodbank_name}] Failed to connect to EDW after retries: {e}")
             raise
-
-        return None
 
 
 
@@ -166,6 +164,7 @@ class Qa_Pipeline:
 
         self.start_date= start_date
         self.end_date= end_date
+        logger.info(f"Pipeline Start date: {start_date}, End date: {end_date}")
 
         print(f"Pipeline Start date: {start_date}, End date: {end_date}")
 
@@ -175,6 +174,7 @@ class Qa_Pipeline:
         '''
         Fetch data from the Foodiverse API and Data Warehouse.
         '''
+        logger.info(f"[{self.foodbank_name}] Fetching data...")
         print(f"[{self.foodbank_name}] Fetching data..."); sys.stdout.flush()
 
         # Fetch data from Foodiverse API
@@ -187,6 +187,7 @@ class Qa_Pipeline:
             self.edw_data = func(conn, self.start_date, self.end_date, self.foodbank_name)
 
         print(f"[{self.foodbank_name}] API data: {self.api_data.shape}, EDW data: {self.edw_data.shape}")
+        logger.info(f"[{self.foodbank_name}] API data: {self.api_data.shape}, EDW data: {self.edw_data.shape}")
         return self.api_data, self.edw_data
 
 
@@ -229,7 +230,7 @@ class Qa_Pipeline:
         merged_df['run_id'] = self.run_id
         merged_df['run_timestamp'] = self.run_timestamp
 
-        print('Merge Complete')
+        logger.info("Merge Complete")
         print(merged_df['_merge'].value_counts())
 
         self.merged_df = merged_df
@@ -360,7 +361,7 @@ class Qa_Pipeline:
         self.merged_df['estimated_difference'] = self.merged_df['estimated_difference'].abs()
 
 
-        print('QA checks complete')
+        logger.info("QA checks complete")
 
         return None
 
@@ -384,8 +385,9 @@ class Qa_Pipeline:
                 connect_args={},
                 isolation_level="AUTOCOMMIT"  # Enable autocommit mode
             )
-            print('connected')
+            logger.info("connected")
         except Exception as e:
+            logger.info("connected failed")
             print('connection failed')
             print(e)
             exit()
@@ -397,6 +399,8 @@ class Qa_Pipeline:
                 if_exists='append',
                 index=False
             )
+
+        logger.info("Data written to EDW")
 
         print('Data written to EDW')
 
@@ -555,33 +559,3 @@ class Qa_Pipeline:
         print(f"[{self.foodbank_name}] QA pipeline complete."); sys.stdout.flush()
 
     
-
-if __name__ == '__main__':
-
-    # Set up logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-
-    # Set up variables
-    year = 2025
-    periods = range(6, 7)# Modify this range as needed
-    period_type = 'month'
-    #foodbank_names = ['Slovakia Food Net', 'Czech Republic Food Net', 'FoodCloud', 'FareShare UK']
-    foodbank_names = ['FareShare UK']
-
-    for period in periods:
-        for foodbank_name in foodbank_names:
-            print(f"Running QA pipeline for {period_type} {period} {year} for {foodbank_name}")
-
-            try:
-                # Run the impact pipeline
-              impact_qa_pipeline = Qa_Pipeline(year, period, period_type, 'impact', foodbank_name)
-              impact_qa_pipeline.run_qa_pipeline()
-              print(f"Impact pipeline completed for {foodbank_name}")
-
-           # kpi_qa_pipeline = Qa_Pipeline(year, period, period_type, 'kpi', foodbank_name)
-           # kpi_qa_pipeline.run_kpi_pipeline()
-           # print(f"KPI pipeline completed for {foodbank_name}")
-
-            except Exception as e:
-                print(f"Error while running QA pipeline for {foodbank_name}: {e}")

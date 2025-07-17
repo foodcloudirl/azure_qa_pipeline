@@ -9,6 +9,7 @@ import logging
 import time
 import json
 # from azure import functions as func
+logger = logging.getLogger(__name__)
 
 import pandas as pd
 import requests
@@ -84,10 +85,11 @@ def get_kpi_report(token, start_date, end_date, page_size=100, mode='members'):
     kpi_url = f'https://api-eu.foodiverse.net/api/reports/branch_compliance_donor/?draw=2&columns%5B0%5D%5Bdata%5D=organisation_name&columns%5B0%5D%5Bname%5D=&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=false&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=name&columns%5B1%5D%5Bname%5D=&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=false&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=official_id&columns%5B2%5D%5Bname%5D=&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=false&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B%5D=&columns%5B46%5D%5Bdata%5D=minDate&columns%5B46%5D%5Bname%5D=&columns%5B46%5D%5Bsearchable%5D=true&columns%5B46%5D%5Borderable%5D=false&columns%5B46%5D%5Bsearch%5D%5Bvalue%5D={start_day_str}T00%3A00%3A00Z&columns%5B46%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B47%5D%5Bdata%5D=maxDate&columns%5B47%5D%5Bname%5D=&columns%5B47%5D%5Bsearchable%5D=true&columns%5B47%5D%5Borderable%5D=false&columns%5B47%5D%5Bsearch%5D%5Bvalue%5D={end_day_str}T23%3A59%3A59Z&columns%5B47%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B48%5D%5Bdata%5D=tag&columns%5B48%5D%5Bname%5D=&columns%5B48%5D%5Bsearchable%5D=true&columns%5B48%5D%5Borderable%5D=false&columns%5B48%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B48%5D%5Bsearch%5D%5Bregex%5D=false&start={i}&length={page_size}&search%5Bvalue%5D=&search%5Bregex%5D=false&parser=datatables&where%5Bmode%5D={mode}&_=1646009329621'
     headers={"Authorization":"Bearer "+token}
     impact_response = requests.request('GET', kpi_url, headers=headers)
+    
+    if impact_response.status_code != 200:
+        logger.error(f"[{mode}] API call failed with status {impact_response.status_code}: {impact_response.text}")
+        raise RuntimeError(f"API call failed with status {impact_response.status_code}")
 
-    if impact_response.status_code!=200:
-        # return error
-        pass
 
     impact_json = impact_response.json()
     filtered=impact_json['data']['recordsTotal']
@@ -177,21 +179,25 @@ def get_impact_report(token, start_date, end_date, page_size=100, mode="members"
     impact_json = impact_response.json()
     filtered=impact_json['data']['recordsFiltered']
     print(f'filtered {filtered}')
+    logger.info(f'filtered {filtered}')
     impact_list.append(impact_json['data']['data'])
 
     pages, q=divmod(filtered, page_size)
     print(f'num pages: {pages}')
-    
+    logger.info(f'num pages: {pages}')
+
     # loop through pages 1 to pages
     for page in range(pages):
         i+=page_size
         impact_url = f"https://api-eu.foodiverse.net/api/reports/donations_impact/?draw=2&columns%5B0%5D%5Bdata%5D=organisation_name&columns%5B0%5D%5Bname%5D=&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=false&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=branch_name&columns%5B1%5D%5Bname%5D=&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=false&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=official_id&columns%5B2%5D%5Bname%5D=&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=false&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=total&columns%5B3%5D%5Bname%5D=&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=false&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B4%5D%5Bdata%5D=total_weight&columns%5B4%5D%5Bname%5D=&columns%5B4%5D%5Bsearchable%5D=true&columns%5B4%5D%5Borderable%5D=false&columns%5B4%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B4%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B5%5D%5Bdata%5D=&columns%5B5%5D%5Bname%5D=&columns%5B5%5D%5Bsearchable%5D=true&columns%5B5%5D%5Borderable%5D=false&columns%5B5%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B5%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B6%5D%5Bdata%5D=total_co2e&columns%5B6%5D%5Bname%5D=&columns%5B6%5D%5Bsearchable%5D=true&columns%5B6%5D%5Borderable%5D=false&columns%5B6%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B6%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B7%5D%5Bdata%5D=total_meals&columns%5B7%5D%5Bname%5D=&columns%5B7%5D%5Bsearchable%5D=true&columns%5B7%5D%5Borderable%5D=false&columns%5B7%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B7%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B8%5D%5Bdata%5D=tag&columns%5B8%5D%5Bname%5D=&columns%5B8%5D%5Bsearchable%5D=true&columns%5B8%5D%5Borderable%5D=false&columns%5B8%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B8%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B9%5D%5Bdata%5D=minDate&columns%5B9%5D%5Bname%5D=&columns%5B9%5D%5Bsearchable%5D=true&columns%5B9%5D%5Borderable%5D=false&columns%5B9%5D%5Bsearch%5D%5Bvalue%5D={start_day_str}T00%3A00%3A00Z&columns%5B9%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B10%5D%5Bdata%5D=maxDate&columns%5B10%5D%5Bname%5D=&columns%5B10%5D%5Bsearchable%5D=true&columns%5B10%5D%5Borderable%5D=false&columns%5B10%5D%5Bsearch%5D%5Bvalue%5D={end_day_str}T23%3A59%3A59Z&columns%5B10%5D%5Bsearch%5D%5Bregex%5D=false&start={i}&length={page_size}&search%5Bvalue%5D=&search%5Bregex%5D=false&parser=datatable&where%5Bmode%5D={mode}&_=1644886812821"
         if i%(page_size*2)==0:
             print('page ', page, '/',pages)
+            logger.info(f'page {page} / {pages}')
 
         impact_response = requests.request('GET', impact_url, headers=headers)
         impact_json = impact_response.json()
         print(f"Appending {len(impact_json['data']['data'])} records")
+        logger.info(f"Appending {len(impact_json['data']['data'])} records")
         impact_list.append(impact_json['data']['data'])
 
         time.sleep(7.5)
