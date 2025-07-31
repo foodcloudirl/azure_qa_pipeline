@@ -68,16 +68,8 @@ def get_edw_impact(conn, start_date, end_date, foodbank_name):
 
 def get_edw_kpis(conn, start_date, end_date, foodbank_name):
     """
-    Constructs and executes the SQL query to retrieve KPI data from EDW.
-    
-    Args:
-    - conn: The database connection object.
-    - start_date (str): The start date for the data range.
-    - end_date (str): The end date for the data range.
-    - foodbank_name (str): The name of the food bank.
-    
-    Returns:
-    - pd.DataFrame: A DataFrame containing the query results.
+    Final EDW KPI query — uses correct Power BI logic,
+    and maps column names to what the QA pipeline expects.
     """
     query = f"""
     SELECT 
@@ -85,33 +77,51 @@ def get_edw_kpis(conn, start_date, end_date, foodbank_name):
         d."Foodiverse name" AS branch_name,
         d."Foodiverse parent_name" AS name,
 
-        COUNT(DISTINCT CASE WHEN f.donation_state <> 'No Posting' THEN f.donation_id END) AS total_posted_count,
-        COUNT(DISTINCT f.donation_response_id) AS total_offers_count,
-        COUNT(DISTINCT f.donation_uuid) AS total_food_offered,
+        COUNT(DISTINCT CASE
+            WHEN f.donation_state NOT IN ('No Posting', 'No Availability', 'Excluded')
+            THEN f.donation_id
+        END) AS total_food_offered,
 
-        COUNT(DISTINCT CASE WHEN f.transfer_success = 1 THEN f.donation_response_id END) AS total_transferred,
-        COUNT(DISTINCT CASE WHEN f.accept_success = 1 THEN f.donation_response_id END) AS total_accepted
+
+        COUNT(DISTINCT CASE 
+            WHEN f.donation_state NOT IN ('No Posting', 'No Availability', 'Excluded') 
+            THEN f.donation_response_id 
+        END) AS total_posted_count,
+
+        -- Unused in QA merge
+        COUNT(DISTINCT f.donation_uuid) AS donation_uuid_count,
+
+        COUNT(DISTINCT CASE 
+            WHEN f.donation_state NOT IN ('No Posting', 'No Availability', 'Excluded') 
+                AND f.accepted_at IS NOT NULL
+            THEN f.donation_response_id 
+        END) AS total_accepted,
+
+        
+        COUNT(DISTINCT CASE 
+            WHEN f.donation_state NOT IN ('No Posting', 'No Availability', 'Excluded') 
+                AND f.transferred_at IS NOT NULL
+            THEN f.donation_response_id 
+        END) AS total_transferred
 
     FROM factsDonationOffersSummaryEdw f  
-        JOIN dimDonors d ON f.donor_id = d."index"
-        JOIN dimNetworks n ON CAST(f.networks_id AS VARCHAR) = n.network_id
+    JOIN dimDonors d ON f.donor_id = d."index"
+    JOIN dimNetworks n ON CAST(f.networks_id AS VARCHAR) = n.network_id
 
-    WHERE f.date BETWEEN '{start_date}' AND '{end_date}'
-        AND d."Foodiverse name" IS NOT NULL
-        AND n."Name" = '{foodbank_name}'
-        AND d."Foodiverse tsm_current_state" != 'Removed'
+    WHERE f.date >= '{start_date}' AND f.date < DATEADD(DAY, 1, '{end_date}')
+      AND d."Foodiverse name" IS NOT NULL
+      AND n."Name" = '{foodbank_name}'
+      AND d."Foodiverse tsm_current_state" != 'Removed'
 
     GROUP BY d."Foodiverse official_id", d."Foodiverse name", d."Foodiverse parent_name"
     ORDER BY d."Foodiverse official_id";
     """
 
-    print("Executing SQL Query:")
     logger.info(query)
     print(query)
 
     df = pd.read_sql(query, conn)
     return df
-
 
 
 

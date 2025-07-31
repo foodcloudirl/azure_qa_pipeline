@@ -312,7 +312,6 @@ class Qa_Pipeline:
 
 
 
-
     
     def run_qa_checks(self):
         '''
@@ -518,26 +517,45 @@ class Qa_Pipeline:
         self.kpi_merged_df['total_transferred_difference'] = self.kpi_merged_df['total_transferred_difference'].abs()
         self.kpi_merged_df['total_accepted_difference'] = self.kpi_merged_df['total_accepted_difference'].abs()
 
-        print(" KPI QA checks complete")
-      # print(self.kpi_merged_df.head())  # Show first few rows
+        logger.info("QA checks complete")
 
         return None
 
+
+    
 
 
     def run_kpi_pipeline(self):
         '''
         Run the full KPI QA pipeline.
         '''
+        print(f"[{self.foodbank_name}] Calculating date range..."); sys.stdout.flush()
         self.calculate_date_range()
+
+        print(f"[{self.foodbank_name}] Fetching data..."); sys.stdout.flush()
         self.fetch_data()
+
+        print(f"[{self.foodbank_name}] Preprocessing..."); sys.stdout.flush()
         self.preprocess_reports()
-        self.merge_data_kpi() 
+
+        print(f"[{self.foodbank_name}] Merging data..."); sys.stdout.flush()
+        self.merge_data_kpi()
+
+        print(f"[{self.foodbank_name}] Running QA checks..."); sys.stdout.flush()
         self.run_kpi_qa_checks()
+
+        print(f"[{self.foodbank_name}] Writing to EDW..."); sys.stdout.flush()
         self.write_kpi_to_edw() 
-        return None
+
+        print(f"[{self.foodbank_name}] QA pipeline complete."); sys.stdout.flush()
+
+
+
 
     def run_qa_pipeline(self):
+        '''
+        Run the full Impact QA pipeline.
+        '''
         print(f"[{self.foodbank_name}] Calculating date range..."); sys.stdout.flush()
         self.calculate_date_range()
 
@@ -557,5 +575,3 @@ class Qa_Pipeline:
         self.write_to_edw()
 
         print(f"[{self.foodbank_name}] QA pipeline complete."); sys.stdout.flush()
-
-    
