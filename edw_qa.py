@@ -68,7 +68,7 @@ def get_edw_impact(conn, start_date, end_date, foodbank_name):
 
 def get_edw_kpis(conn, start_date, end_date, foodbank_name):
     """
-    Final EDW KPI query — uses correct Power BI logic,
+     EDW KPI query — uses Power BI logic,
     and maps column names to what the QA pipeline expects.
     """
     query = f"""
